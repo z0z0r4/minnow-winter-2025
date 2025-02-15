@@ -36,7 +36,9 @@ EthernetAddress random_router_ethernet_address()
 }
 
 uint32_t ip( const string& str )
-{ return Address { str }.ipv4_numeric(); }
+{
+  return Address { str }.ipv4_numeric();
+}
 
 class NetworkSegment : public NetworkInterface::OutputPort
 {
@@ -61,7 +63,9 @@ public:
   }
 
   void transmit( const NetworkInterface& sender, const EthernetFrame& frame ) override
-  { in_flight_.emplace( sender.name(), clone( frame ) ); }
+  {
+    in_flight_.emplace( sender.name(), clone( frame ) );
+  }
 
   void connect( const shared_ptr<NetworkInterface>& interface ) { connections_.push_back( interface ); }
 };
