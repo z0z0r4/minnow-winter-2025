@@ -616,6 +616,231 @@ int main()
         dst_suffix_3 = dst_suffix_3 + 2;
       }
     }
+    // test credit: Raymond Llata
+    {
+      const EthernetAddress local_eth = random_private_ethernet_address();
+      NetworkInterfaceTestHarness test { "Two datagrams sent before learning mapping from an incoming ARP request",
+                                         local_eth,
+                                         Address( "4.3.2.1", 0 ) };
+
+      const auto datagram = make_datagram( "5.6.7.8", "13.12.11.10" );
+      test.execute( SendDatagram { datagram, Address( "192.168.0.1", 0 ) } );
+
+      test.execute( ExpectFrame { make_frame(
+        local_eth,
+        ETHERNET_BROADCAST,
+        EthernetHeader::TYPE_ARP,
+        serialize( make_arp( ARPMessage::OPCODE_REQUEST, local_eth, "4.3.2.1", {}, "192.168.0.1" ) ) ) } );
+      test.execute( ExpectNoFrame {} );
+      const EthernetAddress target_eth = random_private_ethernet_address();
+
+      test.execute( SendDatagram { datagram, Address( "192.168.0.1", 0 ) } );
+      test.execute( ExpectNoFrame {} );
+
+      test.execute( ReceiveFrame { make_frame(
+        target_eth,
+        local_eth,
+        EthernetHeader::TYPE_ARP, // NOLINTNEXTLINE(*-suspicious-*)
+        serialize( make_arp( ARPMessage::OPCODE_REQUEST, target_eth, "192.168.0.1", {}, "4.3.2.1" ) ) ) } );
+
+      test.execute( ExpectFrame { make_frame(
+        local_eth,
+        target_eth,
+        EthernetHeader::TYPE_ARP,
+        serialize( make_arp( ARPMessage::OPCODE_REPLY, local_eth, "4.3.2.1", target_eth, "192.168.0.1" ) ) ) } );
+
+      // Should receive the two queued datagrams
+      test.execute(
+        ExpectFrame { make_frame( local_eth, target_eth, EthernetHeader::TYPE_IPv4, serialize( datagram ) ) } );
+      test.execute(
+        ExpectFrame { make_frame( local_eth, target_eth, EthernetHeader::TYPE_IPv4, serialize( datagram ) ) } );
+      test.execute( ExpectNoFrame {} );
+    }
+
+    // Test credit: Adam Lambert
+    {
+      const EthernetAddress local_eth = random_private_ethernet_address();
+      NetworkInterfaceTestHarness test {
+        "Learn from broadcast ARP request not for our IP", local_eth, Address( "5.5.5.5", 0 ) };
+
+      // Send a datagram to an unmapped address.
+      const auto queued_dgram = make_datagram( "5.5.5.5", "111.222.33.44" );
+      test.execute( SendDatagram { queued_dgram, Address( "10.0.1.2", 0 ) } );
+      // Expect an ARP request.
+      test.execute( ExpectFrame {
+        make_frame( local_eth,
+                    ETHERNET_BROADCAST,
+                    EthernetHeader::TYPE_ARP,
+                    serialize( make_arp( ARPMessage::OPCODE_REQUEST, local_eth, "5.5.5.5", {}, "10.0.1.2" ) ) ) } );
+      test.execute( ExpectNoFrame {} );
+
+      // Receive an ARP request for an IP that isn't ours that contains a mapping we want to learn.
+      const EthernetAddress remote_eth = random_private_ethernet_address();
+      ARPMessage request_for_someone_else
+        = make_arp( ARPMessage::OPCODE_REQUEST, remote_eth, "10.0.1.2", {}, "10.0.1.3" );
+      test.execute( ReceiveFrame { make_frame(
+        remote_eth, ETHERNET_BROADCAST, EthernetHeader::TYPE_ARP, serialize( request_for_someone_else ) ) } );
+
+      // We expect the queued datagram to be sent.
+      test.execute(
+        ExpectFrame { make_frame( local_eth, remote_eth, EthernetHeader::TYPE_IPv4, serialize( queued_dgram ) ) } );
+      test.execute( ExpectNoFrame {} );
+
+      // Send a datagram to the IP of the ARP request.
+      const auto dgram = make_datagram( "5.5.5.5", "99.99.99.99" );
+      test.execute( SendDatagram { dgram, Address( "10.0.1.2", 0 ) } );
+
+      // Expect that we still have learned the mapping.
+      test.execute(
+        ExpectFrame { make_frame( local_eth, remote_eth, EthernetHeader::TYPE_IPv4, serialize( dgram ) ) } );
+
+      test.execute( ExpectNoFrame {} );
+    }
+
+    // Test credit: Adam Lambert
+    {
+      const EthernetAddress local_eth = random_private_ethernet_address();
+      NetworkInterfaceTestHarness test { "Learn from broadcast ARP reply", local_eth, Address( "5.5.5.5", 0 ) };
+
+      // Send a datagram to an unmapped address.
+      const auto queued_dgram = make_datagram( "5.5.5.5", "111.222.33.44" );
+      test.execute( SendDatagram { queued_dgram, Address( "10.0.1.2", 0 ) } );
+      // Expect an ARP request.
+      test.execute( ExpectFrame {
+        make_frame( local_eth,
+                    ETHERNET_BROADCAST,
+                    EthernetHeader::TYPE_ARP,
+                    serialize( make_arp( ARPMessage::OPCODE_REQUEST, local_eth, "5.5.5.5", {}, "10.0.1.2" ) ) ) } );
+      test.execute( ExpectNoFrame {} );
+
+      // Receive an ARP reply for an IP that isn't ours that contains a mapping we want to learn.
+      const EthernetAddress remote_eth = random_private_ethernet_address();
+      ARPMessage reply_for_someone_else
+        = make_arp( ARPMessage::OPCODE_REPLY, remote_eth, "10.0.1.2", local_eth, "10.0.1.3" );
+      test.execute( ReceiveFrame { make_frame(
+        remote_eth, ETHERNET_BROADCAST, EthernetHeader::TYPE_ARP, serialize( reply_for_someone_else ) ) } );
+
+      // We expect the queued datagram to be sent.
+      test.execute(
+        ExpectFrame { make_frame( local_eth, remote_eth, EthernetHeader::TYPE_IPv4, serialize( queued_dgram ) ) } );
+      test.execute( ExpectNoFrame {} );
+
+      // Send a datagram to the IP of the ARP reply.
+      const auto dgram = make_datagram( "5.5.5.5", "99.99.99.99" );
+      test.execute( SendDatagram { dgram, Address( "10.0.1.2", 0 ) } );
+
+      // Expect that we still have learned the mapping.
+      test.execute(
+        ExpectFrame { make_frame( local_eth, remote_eth, EthernetHeader::TYPE_IPv4, serialize( dgram ) ) } );
+
+      test.execute( ExpectNoFrame {} );
+    }
+
+    // test credit: navgup
+    {
+      const EthernetAddress eth_a = random_private_ethernet_address();
+      NetworkInterfaceTestHarness test {
+        "IP->Ethernet associations learned from ARP requests and replies both last for 30 seconds",
+        eth_a,
+        Address( "4.3.2.1", 0 ) };
+
+      // create network interface B: Eth = B, IP = 192.168.0.1
+      const EthernetAddress eth_b = random_private_ethernet_address();
+      const Address ip_b = Address( "192.168.0.1", 0 );
+
+      // at t = 0s, A sends ARP request to B's IP
+      test.execute( SendDatagram { make_datagram( "4.3.2.1", "192.168.0.1" ), ip_b } );
+      test.execute( ExpectFrame {
+        make_frame( eth_a,
+                    ETHERNET_BROADCAST,
+                    EthernetHeader::TYPE_ARP,
+                    serialize( make_arp( ARPMessage::OPCODE_REQUEST, eth_a, "4.3.2.1", {}, "192.168.0.1" ) ) ) } );
+      test.execute( ExpectNoFrame {} );
+
+      // at t = 10s, A receives ARP reply from B
+      // B remembers A's mapping with initialization time t = 0s (b/c learned from the ARP request)
+      // A remember's B's mapping with initialization time t = 10s (b/c learned from the ARP reply)
+      test.execute( Tick { 10000 } );
+      test.execute( ReceiveFrame {
+        make_frame( eth_b,
+                    eth_a,
+                    EthernetHeader::TYPE_ARP,
+                    serialize( make_arp( ARPMessage::OPCODE_REPLY, eth_b, "192.168.0.1", eth_a, "4.3.2.1" ) ) ) } );
+      test.execute( ExpectNoFrame {} );
+
+      // at t = 35s, A sends an IPv4 datagram to B
+      test.execute( Tick { 25000 } );
+      const auto datagram = make_datagram( "4.3.2.1", "192.168.0.1" );
+      test.execute( SendDatagram { datagram, ip_b } );
+      // if A remembered B's mapping at the time of reply, this will be pass
+      // if A used default value of t = 0 (for example) and didn't update, this would be fail
+      test.execute( ExpectFrame { make_frame( eth_a, eth_b, EthernetHeader::TYPE_IPv4, serialize( datagram ) ) } );
+      test.execute( ExpectNoFrame {} );
+    }
+
+    {
+      // Aditi Bhaskar (aditijb@cs.stanford.edu)
+      // Purpose: This case tests what happens when you get an ARP reply that you never requested.
+
+      const EthernetAddress local_eth = random_private_ethernet_address();
+      const EthernetAddress remote_eth = random_private_ethernet_address();
+      NetworkInterfaceTestHarness test { "unrequested ARP reply", local_eth, Address( "5.5.5.5", 0 ) };
+
+      // First, 10.0.1.1 replies to our local 5.5.5.5 with its ethernet address
+      test.execute( ReceiveFrame { make_frame(
+        remote_eth,
+        local_eth,
+        EthernetHeader::TYPE_ARP,
+        serialize( make_arp( ARPMessage::OPCODE_REPLY, remote_eth, "10.0.1.1", local_eth, "5.5.5.5" ) ) ) } );
+
+      test.execute( ExpectNoFrame {} );
+
+      // A later-sent datagram doesn't crash the NetworkInterface
+      const auto datagram = make_datagram( "5.6.7.8", "13.12.11.10" );
+      test.execute( SendDatagram { datagram, Address( "10.0.1.1", 0 ) } );
+    }
+
+    // test credit: Lara Franciulli
+    {
+      const EthernetAddress local_eth = random_private_ethernet_address();
+      const EthernetAddress target_eth = random_private_ethernet_address();
+
+      NetworkInterfaceTestHarness test {
+        "NetworkInterface sends pending datagrams exactly once", local_eth, Address( "4.3.2.1", 0 ) };
+
+      const auto datagram = make_datagram( "5.6.7.8", "13.12.11.10" );
+
+      // Send a datagram before knowing the EthernetAddress of the next_hop, triggering an ARP request
+      test.execute( SendDatagram { datagram, Address( "192.168.0.1", 0 ) } );
+
+      // Expect ARP request to be sent
+      test.execute( ExpectFrame { make_frame(
+        local_eth,
+        ETHERNET_BROADCAST,
+        EthernetHeader::TYPE_ARP,
+        serialize( make_arp( ARPMessage::OPCODE_REQUEST, local_eth, "4.3.2.1", {}, "192.168.0.1" ) ) ) } );
+
+      // Receive an ARP reply with respective EthernetAddress
+      test.execute( ReceiveFrame { make_frame(
+        target_eth,
+        local_eth,
+        EthernetHeader::TYPE_ARP,
+        serialize( make_arp( ARPMessage::OPCODE_REPLY, target_eth, "192.168.0.1", local_eth, "4.3.2.1" ) ) ) } );
+
+      // The pending datagram should now be sent
+      test.execute(
+        ExpectFrame { make_frame( local_eth, target_eth, EthernetHeader::TYPE_IPv4, serialize( datagram ) ) } );
+
+      // Send another ARP reply for the same EthernetAddress
+      test.execute( ReceiveFrame { make_frame(
+        target_eth,
+        local_eth,
+        EthernetHeader::TYPE_ARP,
+        serialize( make_arp( ARPMessage::OPCODE_REPLY, target_eth, "192.168.0.1", local_eth, "4.3.2.1" ) ) ) } );
+
+      // No pending datagrams exist for this EthernetAddress, so no outbound frames
+      test.execute( ExpectNoFrame {} );
+    }
   } catch ( const exception& e ) {
     cerr << e.what() << "\n";
     return EXIT_FAILURE;

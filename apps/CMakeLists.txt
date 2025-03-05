@@ -21,6 +21,8 @@ macro(add_app exec_name)
 endmacro(add_app)
 
 add_app(webget)
+add_app(iptest)
 add_app(tcp_native)
 add_app(tcp_ipv4)
+add_app(endtoend)
 add_app(ip_raw)

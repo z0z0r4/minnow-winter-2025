@@ -344,6 +344,63 @@ void network_simulator()
     network.simulate();
   }
 
+  // test credit: thanawan, rishirv, devanshu
+  cout << green << "\n\nSuccess! Testing network with no default route..." << normal << "\n\n";
+  {
+    Router router {};
+    auto addr0 = random_router_ethernet_address();
+    auto addr1 = random_router_ethernet_address();
+    auto addr2 = random_router_ethernet_address();
+
+    auto frames0 = make_shared<FramesOut>();
+    auto frames1 = make_shared<FramesOut>();
+    auto frames2 = make_shared<FramesOut>();
+
+    auto eth0 = make_shared<NetworkInterface>( "eth0", frames0, addr0, Address { "18.241.0.1" } );
+    auto eth1 = make_shared<NetworkInterface>( "eth1", frames1, addr1, Address { "10.0.0.1" } );
+    auto eth2 = make_shared<NetworkInterface>( "eth2", frames2, addr2, Address { "192.168.0.1" } );
+
+    router.add_interface( eth0 );
+    auto eth1_id = router.add_interface( eth1 );
+    auto eth2_id = router.add_interface( eth2 );
+
+    router.add_route( ip( "10.0.0.0" ), 8, {}, eth1_id );
+
+    InternetDatagram dg1 { { .len = 20,
+                             .ttl = 64,
+                             .src = Address { "192.168.0.2" }.ipv4_numeric(),
+                             .dst = Address { "10.0.0.5" }.ipv4_numeric() } };
+    dg1.header.compute_checksum();
+
+    router.interface( eth2_id )->recv_frame(
+      { .header = { addr2, random_host_ethernet_address(), EthernetHeader::TYPE_IPv4 },
+        .payload = serialize( dg1 ) } );
+
+    router.route();
+
+    frames1->expect_frame();
+    if ( ( !frames0->frames.empty() ) or ( !frames1->frames.empty() ) or ( !frames2->frames.empty() ) ) {
+      throw runtime_error( "router sent an unexpected frame (after the expected ARP request)" );
+    }
+
+    InternetDatagram dg2 { { .len = 20,
+                             .ttl = 64,
+                             .src = Address { "192.168.0.2" }.ipv4_numeric(),
+                             .dst = Address { "18.241.0.5" }.ipv4_numeric() } };
+    dg2.header.compute_checksum();
+
+    router.interface( eth2_id )->recv_frame(
+      { .header = { addr2, random_host_ethernet_address(), EthernetHeader::TYPE_IPv4 },
+        .payload = serialize( dg2 ) } );
+
+    router.route();
+
+    if ( ( !frames0->frames.empty() ) or ( !frames1->frames.empty() ) or ( !frames2->frames.empty() ) ) {
+      throw runtime_error(
+        "router sent an unexpected frame (datagram should have been dropped because there is no matching route)" );
+    }
+  }
+
   cout << "\n\n\033[32;1mCongratulations! All datagrams were routed successfully.\033[m\n";
 }
 

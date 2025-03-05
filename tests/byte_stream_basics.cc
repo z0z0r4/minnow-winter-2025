@@ -89,6 +89,29 @@ int main()
       test.execute( BytesPushed { 5 } );
       test.execute( BytesPopped { 5 } );
     }
+
+#if 0
+    // test credit: Neal LB
+    {
+      ByteStreamTestHarness test { "okay to push an empty string after close I", 15 };
+      test.execute( Close {} );
+      test.execute( IsClosed { true } );
+      test.execute( Push { "" } );
+      test.execute( HasError { false } );
+      test.execute( IsFinished { true } );
+      all_zeroes( test );
+    }
+
+    {
+      ByteStreamTestHarness test { "okay to push an empty string after close II", 15 };
+      test.execute( Push { "hello world" } );
+      test.execute( Close {} );
+      test.execute( IsClosed { true } );
+      test.execute( Push { "" } );
+      test.execute( HasError { false } );
+      test.execute( IsClosed { true } );
+    }
+#endif
   } catch ( const exception& e ) {
     cerr << "Exception: " << e.what() << "\n";
     return EXIT_FAILURE;
