@@ -4,6 +4,7 @@
 #include <list>
 #include <memory>
 #include <poll.h>
+#include <cstdint>
 
 #include "file_descriptor.hh"
 
