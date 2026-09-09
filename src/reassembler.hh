@@ -63,11 +63,8 @@ public:
   const Writer& writer() const { return output_.writer(); }
 
 protected:
-  Status check_overlap( uint64_t first_index, uint64_t last_index, uint64_t new_first_index, uint64_t new_last_index ) const;
-  Reassembler::Substring merge_substrings(
-    const Reassembler::Substring& a_substring,
-    const Reassembler::Substring& b_substring,
-    Status overlap_status ) const;
+  Status check_overlap( Substring substring_a, Substring substring_b ) const;
+  Substring merge_substrings(const Substring& a_substring, const Substring& b_substring ) const;
   void check_and_close();
 
 private:

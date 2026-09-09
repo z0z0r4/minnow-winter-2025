@@ -1,10 +1,41 @@
 #include "reassembler.hh"
 #include "debug.hh"
 
+#include <cstring>
 #include <iterator>
 #include <optional>
 
 using namespace std;
+
+// void printf_substrings( const std::map<uint64_t, Reassembler::Substring>& substrings )
+// {
+//   printf( "Pending substrings:\n" );
+//   for ( const auto& [first_index, substring] : substrings ) {
+//     printf( "  [%lu, %lu]: \n", substring.first_index, substring.last_index );
+//   }
+// }
+
+// std::string get_status_string( Reassembler::Status status )
+// {
+//   switch ( status ) {
+//     case Reassembler::Status::DisjointBefore:
+//       return "DisjointBefore";
+//     case Reassembler::Status::OverlapStart:
+//       return "OverlapStart";
+//     case Reassembler::Status::StrictlyInside:
+//       return "StrictlyInside";
+//     case Reassembler::Status::ExactMatch:
+//       return "ExactMatch";
+//     case Reassembler::Status::StrictlyEncloses:
+//       return "StrictlyEncloses";
+//     case Reassembler::Status::OverlapEnd:
+//       return "OverlapEnd";
+//     case Reassembler::Status::DisjointAfter:
+//       return "DisjointAfter";
+//     default:
+//       return "UnknownStatus";
+//   }
+// }
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
 {
@@ -37,6 +68,9 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
   }
 
   auto last_index = first_index + data.size() - 1;
+
+  // printf( "Insert [%lu, %lu] \n", first_index, last_index );
+
   Substring new_substring = { first_index, last_index, data };
 
   auto it = substrings_.lower_bound( first_index );
@@ -53,59 +87,75 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
   std::optional<Status> right_status = std::nullopt;
   std::optional<Status> left_status = std::nullopt;
 
-  if ( right_sub_string.has_value() ) {
-    right_status = check_overlap(
-      first_index, last_index, right_sub_string.value().first_index, right_sub_string.value().last_index );
-  }
   if ( left_sub_string.has_value() ) {
-    left_status = check_overlap(
-      left_sub_string.value().first_index, left_sub_string.value().last_index, first_index, last_index );
+    left_status = check_overlap( left_sub_string.value(), new_substring );
   }
 
+  // printf_substrings( substrings_ );
+  // printf( "[%lu, %lu] and [%lu, %lu], Left status: %s\n",
+  //         new_substring.first_index,
+  //         new_substring.last_index,
+  //         left_sub_string.has_value() ? left_sub_string.value().first_index : 0,
+  //         left_sub_string.has_value() ? left_sub_string.value().last_index : 0,
+  //         left_status.has_value() ? get_status_string( left_status.value() ).c_str() : "None" );
+
+  // As `it` is lower_bound result, only check nearby left substring for overlap is enough
   if ( left_status.has_value() && ( left_status.value() != Status::DisjointBefore ) ) {
     // Handle left overlap
     if ( left_status.value() == Status::ExactMatch || left_status.value() == Status::StrictlyEncloses ) {
       check_and_close();
       return;
     } else if ( left_status.value() == Status::StrictlyInside ) {
-      // remove the existing substring and try insert the new substring again, avoid missing any overlap
+      // remove the existing substring, Don't cover the new substring value again!
       substrings_.erase( left_sub_string.value().first_index );
-      insert( first_index, data, is_last_substring );
-      check_and_close();
-      return;
     } else if ( left_status.value() == Status::OverlapStart || left_status.value() == Status::OverlapEnd ) {
       // merge with the left substring
-      auto merged_result = merge_substrings( left_sub_string.value(), new_substring, left_status.value() );
+      auto merged_result = merge_substrings( left_sub_string.value(), new_substring );
       substrings_.erase( left_sub_string.value().first_index );
-      insert( merged_result.first_index, merged_result.data, is_last_substring );
-      check_and_close();
-      return;
+      new_substring = Substring { merged_result.first_index, merged_result.last_index, merged_result.data };
     }
   }
 
-  if ( right_status.has_value() && ( right_status.value() != Status::DisjointAfter ) ) {
-    // Handle right overlap
-    if ( right_status.value() == Status::ExactMatch || right_status.value() == Status::StrictlyInside ) {
+  it = substrings_.lower_bound( new_substring.first_index );
+
+  // printf_substrings( substrings_ );
+
+  while ( it != substrings_.end() ) {
+    right_sub_string = it->second;
+    // Caution: Different order of parameters, the state action is different from right (StrictlyInside vs
+    // StrictlyEncloses)
+    right_status = check_overlap( new_substring, right_sub_string.value() );
+    // printf( "[%lu, %lu] and [%lu, %lu], Right status: %s\n",
+    //         new_substring.first_index,
+    //         new_substring.last_index,
+    //         right_sub_string.value().first_index,
+    //         right_sub_string.value().last_index,
+    //         get_status_string( right_status.value() ).c_str() );
+    if ( right_status.value() == Status::DisjointBefore ) {
+      break;
+    } else if ( right_status.value() == Status::ExactMatch || right_status.value() == Status::StrictlyInside ) {
       check_and_close();
       return;
     } else if ( right_status.value() == Status::StrictlyEncloses ) {
-      // remove the existing substring and try insert the new substring again, avoid missing any overlap
-      substrings_.erase( right_sub_string.value().first_index );
-      insert( first_index, data, is_last_substring );
-      check_and_close();
-      return;
+      // remove the existing substring, Don't cover the new substring value again!
+      it = substrings_.erase( it );
     } else if ( right_status.value() == Status::OverlapStart || right_status.value() == Status::OverlapEnd ) {
       // merge with the right substring
-      auto merged_result = merge_substrings( new_substring, right_sub_string.value(), right_status.value() );
-      substrings_.erase( right_sub_string.value().first_index );
-      insert( merged_result.first_index, merged_result.data, is_last_substring );
-      check_and_close();
-      return;
+      auto merged_result = merge_substrings( new_substring, right_sub_string.value() );
+      it = substrings_.erase( it );
+      new_substring = Substring { merged_result.first_index, merged_result.last_index, merged_result.data };
+    } else {
+      // Get next right substring
+      ++it;
     }
   }
 
   // insert new substring
-  substrings_[first_index] = new_substring;
+  substrings_[new_substring.first_index] = new_substring;
+
+  // printf( "Inserted substring [%lu, %lu] \n", new_substring.first_index, new_substring.last_index );
+
+  // printf_substrings( substrings_ );
 
   // check first substring in the head_indices_ map, if it is the next byte to write, write it to the output stream
   while ( !substrings_.empty() && !output_.writer().is_closed() ) {
@@ -115,11 +165,13 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
       output_.writer().push( first_substring.data );
       next_byte_to_write_ += first_substring.data.size();
       // remove the substring from the maps
-      substrings_.erase( first_substring.first_index );
+      substrings_.erase( substrings_.begin() );
     } else {
       break;
     }
   }
+
+  // printf_substrings( substrings_ );
 
   check_and_close();
 }
@@ -135,11 +187,14 @@ uint64_t Reassembler::count_bytes_pending() const
   return total_bytes;
 }
 
-Reassembler::Status Reassembler::check_overlap( uint64_t first_index,
-                                                uint64_t last_index,
-                                                uint64_t other_first_index,
-                                                uint64_t other_last_index ) const
+Reassembler::Status Reassembler::check_overlap( Reassembler::Substring substring_a,
+                                                Reassembler::Substring substring_b ) const
 {
+  uint64_t first_index = substring_a.first_index;
+  uint64_t last_index = substring_a.last_index;
+  uint64_t other_first_index = substring_b.first_index;
+  uint64_t other_last_index = substring_b.last_index;
+
   if ( last_index < other_first_index ) {
     return Status::DisjointBefore;
   } else if ( first_index > other_last_index ) {
@@ -160,36 +215,19 @@ Reassembler::Status Reassembler::check_overlap( uint64_t first_index,
 }
 
 Reassembler::Substring Reassembler::merge_substrings( const Reassembler::Substring& a_substring,
-                                                      const Reassembler::Substring& b_substring,
-                                                      Status overlap_status ) const
+                                                      const Reassembler::Substring& b_substring ) const
 {
-  auto a_first = a_substring.first_index;
-  auto a_last = a_substring.last_index;
-  auto b_first = b_substring.first_index;
-  auto b_last = b_substring.last_index;
+  auto merged_first = std::min( a_substring.first_index, b_substring.first_index );
+  auto merged_last = std::max( a_substring.last_index, b_substring.last_index );
 
-  switch ( overlap_status ) {
-    case Status::ExactMatch:
-      return { a_substring.first_index, a_substring.last_index, a_substring.data };
-    case Status::StrictlyEncloses:
-      return { a_substring.first_index, a_substring.last_index, a_substring.data };
-    case Status::StrictlyInside:
-      return { b_substring.first_index, b_substring.last_index, b_substring.data };
-    case Status::OverlapStart: {
-      auto merged_first = a_first;
-      auto merged_last = b_last;
-      auto merged_data = a_substring.data + b_substring.data.substr( a_last - b_first + 1 );
-      return { merged_first, merged_last, merged_data };
-    }
-    case Status::OverlapEnd: {
-      auto merged_first = b_first;
-      auto merged_last = a_last;
-      auto merged_data = b_substring.data + a_substring.data.substr( b_last - a_first + 1 );
-      return { merged_first, merged_last, merged_data };
-    }
-    default:
-      throw std::invalid_argument( "Invalid overlap status for merging substrings" );
-  }
+  std::string merged_data( merged_last - merged_first + 1, '\0' );
+
+  std::memcpy(
+    &merged_data[a_substring.first_index - merged_first], a_substring.data.data(), a_substring.data.size() );
+  std::memcpy(
+    &merged_data[b_substring.first_index - merged_first], b_substring.data.data(), b_substring.data.size() );
+
+  return { merged_first, merged_last, std::move( merged_data ) };
 }
 
 void Reassembler::check_and_close()
