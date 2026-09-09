@@ -2,7 +2,6 @@
 
 #include "byte_stream.hh"
 
-#include <set>
 #include <map>
 #include <utility>
 
@@ -10,24 +9,7 @@ class Reassembler
 {
 public:
   // Construct Reassembler to write into given ByteStream.
-  explicit Reassembler( ByteStream&& output ) : output_( std::move( output ) ), substrings_({}), next_byte_to_write_( 0 ) { }
-  
-
-  enum Status {
-    DisjointBefore,
-    OverlapStart,
-    StrictlyInside,
-    ExactMatch,
-    StrictlyEncloses,
-    OverlapEnd,
-    DisjointAfter,
-  };
-
-  struct Substring {
-    uint64_t first_index;
-    uint64_t last_index;
-    std::string data;
-  };
+  explicit Reassembler( ByteStream&& output ) : output_( std::move( output ) ) {}
 
   /*
    * Insert a new substring to be reassembled into a ByteStream.
@@ -62,20 +44,11 @@ public:
   // Access output stream writer, but const-only (can't write from outside)
   const Writer& writer() const { return output_.writer(); }
 
-protected:
-  Status check_overlap( uint64_t first_index, uint64_t last_index, uint64_t new_first_index, uint64_t new_last_index ) const;
-  Reassembler::Substring merge_substrings(
-    const Reassembler::Substring& a_substring,
-    const Reassembler::Substring& b_substring,
-    Status overlap_status ) const;
-  void check_and_close();
-
 private:
   ByteStream output_;
-  
-  std::map<uint64_t, Substring> substrings_;  // key = first index
+  std::map<uint64_t, std::string> substrings_; // key = first index
 
   uint64_t next_byte_to_write_ = 0;
-  bool has_last_ = false;
+  bool eof_received_ = false;
   uint64_t eof_index_ = 0;
 };
