@@ -10,7 +10,7 @@ class Reassembler
 {
 public:
   // Construct Reassembler to write into given ByteStream.
-  explicit Reassembler( ByteStream&& output ) : output_( std::move( output ) ), substrings_({}), next_byte_to_write_( 0 ) { }
+  explicit Reassembler( ByteStream&& output ) : output_( std::move( output ) ), substrings_({}), next_index_to_write_( 0 ) { }
   
 
   enum Status {
@@ -65,14 +65,13 @@ public:
 protected:
   Status check_overlap( Substring substring_a, Substring substring_b ) const;
   Substring merge_substrings(const Substring& a_substring, const Substring& b_substring ) const;
-  void check_and_close();
 
 private:
   ByteStream output_;
   
   std::map<uint64_t, Substring> substrings_;  // key = first index
 
-  uint64_t next_byte_to_write_ = 0;
-  bool has_last_ = false;
+  uint64_t next_index_to_write_ = 0;
+  bool eof_received_ = false;
   uint64_t eof_index_ = 0;
 };

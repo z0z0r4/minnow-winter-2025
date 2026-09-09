@@ -39,141 +39,80 @@ using namespace std;
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
 {
-  const uint64_t first_unassembled = next_byte_to_write_;
-  const uint64_t available_cap = output_.writer().available_capacity();
-  const uint64_t first_unacceptable = first_unassembled + available_cap;
+  const uint64_t first_unacceptable = next_index_to_write_ + output_.writer().available_capacity();
+  const uint64_t original_first_index = first_index;
 
   if ( is_last_substring ) {
-    has_last_ = true;
+    eof_received_ = true;
     eof_index_ = first_index + data.size();
   }
 
-  if ( first_index + data.size() <= first_unassembled || first_index >= first_unacceptable ) {
-    check_and_close();
+  first_index = max( first_index, next_index_to_write_ );
+  uint64_t last_index = min( original_first_index + data.size(), first_unacceptable );
+  if (first_index >= last_index) {
+    if (eof_received_ && next_index_to_write_ == eof_index_) {
+      output_.writer().close();
+    }
     return;
   }
 
-  if ( first_index + data.size() > first_unacceptable ) {
-    data = data.substr( 0, first_unacceptable - first_index );
-  }
-
-  if ( first_index < first_unassembled ) {
-    data = data.substr( first_unassembled - first_index );
-    first_index = first_unassembled;
-  }
-
-  if ( data.empty() ) {
-    check_and_close();
-    return;
-  }
-
-  auto last_index = first_index + data.size() - 1;
-
-  // printf( "Insert [%lu, %lu] \n", first_index, last_index );
+  data = data.substr(first_index - original_first_index, last_index - first_index);
+  
+  last_index = first_index + data.size() - 1;
 
   Substring new_substring = { first_index, last_index, data };
 
   auto it = substrings_.lower_bound( first_index );
-  std::optional<Substring> right_sub_string = std::nullopt;
-  std::optional<Substring> left_sub_string = std::nullopt;
-  if ( it != substrings_.end() ) {
-    right_sub_string = it->second;
-  }
-
   if ( it != substrings_.begin() ) {
-    left_sub_string = std::prev( it )->second;
-  }
-
-  std::optional<Status> right_status = std::nullopt;
-  std::optional<Status> left_status = std::nullopt;
-
-  if ( left_sub_string.has_value() ) {
-    left_status = check_overlap( left_sub_string.value(), new_substring );
-  }
-
-  // printf_substrings( substrings_ );
-  // printf( "[%lu, %lu] and [%lu, %lu], Left status: %s\n",
-  //         new_substring.first_index,
-  //         new_substring.last_index,
-  //         left_sub_string.has_value() ? left_sub_string.value().first_index : 0,
-  //         left_sub_string.has_value() ? left_sub_string.value().last_index : 0,
-  //         left_status.has_value() ? get_status_string( left_status.value() ).c_str() : "None" );
-
-  // As `it` is lower_bound result, only check nearby left substring for overlap is enough
-  if ( left_status.has_value() && ( left_status.value() != Status::DisjointBefore ) ) {
-    // Handle left overlap
-    if ( left_status.value() == Status::ExactMatch || left_status.value() == Status::StrictlyEncloses ) {
-      check_and_close();
-      return;
-    } else if ( left_status.value() == Status::StrictlyInside ) {
-      // remove the existing substring, Don't cover the new substring value again!
-      substrings_.erase( left_sub_string.value().first_index );
-    } else if ( left_status.value() == Status::OverlapStart || left_status.value() == Status::OverlapEnd ) {
-      // merge with the left substring
-      auto merged_result = merge_substrings( left_sub_string.value(), new_substring );
-      substrings_.erase( left_sub_string.value().first_index );
-      new_substring = Substring { merged_result.first_index, merged_result.last_index, merged_result.data };
+    auto previous = std::prev( it );
+    if ( previous->first + previous->second.data.size() > first_index ) {
+      // Left overlap
+      it = previous;
     }
   }
 
-  it = substrings_.lower_bound( new_substring.first_index );
-
-  // printf_substrings( substrings_ );
-
+  std::optional<Status> status = std::nullopt;
+  std::optional<Substring> current_substrng = std::nullopt;
+  
   while ( it != substrings_.end() ) {
-    right_sub_string = it->second;
-    // Caution: Different order of parameters, the state action is different from right (StrictlyInside vs
-    // StrictlyEncloses)
-    right_status = check_overlap( new_substring, right_sub_string.value() );
-    // printf( "[%lu, %lu] and [%lu, %lu], Right status: %s\n",
-    //         new_substring.first_index,
-    //         new_substring.last_index,
-    //         right_sub_string.value().first_index,
-    //         right_sub_string.value().last_index,
-    //         get_status_string( right_status.value() ).c_str() );
-    if ( right_status.value() == Status::DisjointBefore ) {
-      break;
-    } else if ( right_status.value() == Status::ExactMatch || right_status.value() == Status::StrictlyInside ) {
-      check_and_close();
+    current_substrng = it->second;
+    status = check_overlap( new_substring, current_substrng.value() );
+
+    if ( status.value() == Status::OverlapEnd || status.value() == Status::OverlapStart) {
+      // merge, remove existing substring, cover new_substring by merged substring, then insert new_substring
+      auto merged_substring = merge_substrings( new_substring, current_substrng.value() );
+      new_substring = Substring { merged_substring.first_index, merged_substring.last_index, merged_substring.data };
+      it = substrings_.erase( it );
+    } else if (status.value() == Status::StrictlyEncloses) {
+      // remove existing substring
+      it = substrings_.erase( it );
+    } else if (status.value() == Status::StrictlyInside || status.value() == Status::ExactMatch) {
+      // do nothing, don't insert new_substring, return
+      // Inside or Exact match means it is impossible to overlap other substrings, no push at all, so we don't need to close
       return;
-    } else if ( right_status.value() == Status::StrictlyEncloses ) {
-      // remove the existing substring, Don't cover the new substring value again!
-      it = substrings_.erase( it );
-    } else if ( right_status.value() == Status::OverlapStart || right_status.value() == Status::OverlapEnd ) {
-      // merge with the right substring
-      auto merged_result = merge_substrings( new_substring, right_sub_string.value() );
-      it = substrings_.erase( it );
-      new_substring = Substring { merged_result.first_index, merged_result.last_index, merged_result.data };
+    } else if (status.value() == Status::DisjointAfter) {
+      // then insert new_substring
+      break;
     } else {
-      // Get next right substring
-      ++it;
+      it++;
     }
   }
 
   // insert new substring
   substrings_[new_substring.first_index] = new_substring;
 
-  // printf( "Inserted substring [%lu, %lu] \n", new_substring.first_index, new_substring.last_index );
-
-  // printf_substrings( substrings_ );
-
   // check first substring in the head_indices_ map, if it is the next byte to write, write it to the output stream
-  while ( !substrings_.empty() && !output_.writer().is_closed() ) {
-    auto& [_, first_substring] = *substrings_.begin();
-    if ( first_substring.first_index == next_byte_to_write_ ) {
+  while ( !substrings_.empty() && !output_.writer().is_closed() && substrings_.begin()->second.first_index == next_index_to_write_ ) {
       // write the substring to the output stream
-      output_.writer().push( first_substring.data );
-      next_byte_to_write_ += first_substring.data.size();
+      output_.writer().push( substrings_.begin()->second.data );
+      next_index_to_write_ += substrings_.begin()->second.data.size();
       // remove the substring from the maps
       substrings_.erase( substrings_.begin() );
-    } else {
-      break;
-    }
   }
 
-  // printf_substrings( substrings_ );
-
-  check_and_close();
+  if ( eof_received_ && next_index_to_write_ == eof_index_ && !output_.writer().is_closed() ) {
+    output_.writer().close();
+  }
 }
 
 // How many bytes are stored in the Reassembler itself?
@@ -228,11 +167,4 @@ Reassembler::Substring Reassembler::merge_substrings( const Reassembler::Substri
     &merged_data[b_substring.first_index - merged_first], b_substring.data.data(), b_substring.data.size() );
 
   return { merged_first, merged_last, std::move( merged_data ) };
-}
-
-void Reassembler::check_and_close()
-{
-  if ( has_last_ && next_byte_to_write_ == eof_index_ && !output_.writer().is_closed() ) {
-    output_.writer().close();
-  }
 }
