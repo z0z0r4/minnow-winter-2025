@@ -63,7 +63,7 @@ public:
   const Writer& writer() const { return output_.writer(); }
 
 protected:
-  Status check_overlap( Substring substring_a, Substring substring_b ) const;
+  Status check_overlap( const Substring& substring_a, const Substring& substring_b ) const;
   Substring merge_substrings(const Substring& a_substring, const Substring& b_substring ) const;
 
 private:
