@@ -27,6 +27,11 @@ public:
     uint64_t first_index;
     uint64_t last_index;
     std::string data;
+
+    Substring() : first_index(0), last_index(0), data() {}
+    
+    Substring(uint64_t first, uint64_t last, std::string d)
+        : first_index(first), last_index(last), data(std::move(d)) {}
   };
 
   /*
