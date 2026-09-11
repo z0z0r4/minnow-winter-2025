@@ -62,6 +62,9 @@ public:
   // Access output stream writer, but const-only (can't write from outside)
   const Writer& writer() const { return output_.writer(); }
 
+  void set_error() { output_.set_error(); }
+  bool has_error() const { return output_.has_error(); }
+
 protected:
   Status check_overlap( const Substring& substring_a, const Substring& substring_b ) const;
   Substring merge_substrings(const Substring& a_substring, const Substring& b_substring ) const;

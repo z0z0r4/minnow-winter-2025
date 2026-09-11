@@ -7,8 +7,16 @@
 class TCPReceiver
 {
 public:
+  enum class State {
+    LISTEN,
+    SYN_RECEIVED,
+    ESTABLISHED,
+    FIN_RECEIVED,
+    CLOSED
+  };
+
   // Construct with given Reassembler
-  explicit TCPReceiver( Reassembler&& reassembler ) : reassembler_( std::move( reassembler ) ) {}
+  explicit TCPReceiver( Reassembler&& reassembler ) : reassembler_( std::move( reassembler ) ), ins_( 0 ) {}
 
   /*
    * The TCPReceiver receives TCPSenderMessages, inserting their payload into the Reassembler
@@ -27,4 +35,6 @@ public:
 
 private:
   Reassembler reassembler_;
+  State state_ = State::LISTEN;
+  Wrap32 ins_;
 };
