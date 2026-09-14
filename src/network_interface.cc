@@ -38,14 +38,14 @@ void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Addre
   if ( arp_entry == arp_cache_.end() ) {
     // find retry table entry
     auto retry_entry = arp_request_time_.find( next_hop.ipv4_numeric() );
-    if ( retry_entry == arp_request_time_.end() || retry_entry->second >= 5000 ) {
+    if ( retry_entry == arp_request_time_.end() || now - retry_entry->second >= 5000 ) {
       // ARP Cache miss, send ARP request
       send_arp_request( next_hop );
-      arp_request_time_[next_hop.ipv4_numeric()] = 0;
+      arp_request_time_[next_hop.ipv4_numeric()] = now;
     }
 
     // push into queue
-    ip_frames_out_.push( { dgram, next_hop, 0 } );
+    ip_frames_out_.push( { dgram, next_hop, now } );
     return;
   }
 
@@ -71,7 +71,7 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
         return; // Drop
       }
       // Learn the sender's mapping
-      arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, 0 };
+      arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, now };
 
       // Send ARP reply
       send_arp_reply( arp_message.sender_ethernet_address,
@@ -83,7 +83,7 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
       }
 
       // Learn the sender's mapping
-      arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, 0 };
+      arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, now };
       auto arp_request_time_entry = arp_request_time_.find( arp_message.sender_ip_address );
       if ( arp_request_time_entry != arp_request_time_.end() ) {
         arp_request_time_.erase( arp_request_time_entry );
@@ -98,7 +98,7 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
           send_eth_datagram( dgram, arp_message.sender_ethernet_address );
         } else {
           // ARP Cache miss, keep it in the queue
-          if ( enqueue_time <= 5000 ) {
+          if ( now - enqueue_time <= 5000 ) {
             ip_frames_out_.push( { dgram, next_hop, enqueue_time } );
           }
         }
@@ -123,20 +123,19 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void NetworkInterface::tick( const size_t ms_since_last_tick )
 {
+  now += ms_since_last_tick;
+
   // Update ARP request timers
   for ( auto& entry : arp_request_time_ ) {
-    entry.second += ms_since_last_tick;
-
-    if ( entry.second >= 5000 ) {
+    if ( now - entry.second >= 5000 ) {
       // Send ARP request again if it has been more than 5 seconds since the last request
       send_arp_request( Address::from_ipv4_numeric( entry.first ) );
-      entry.second = 0; // reset timer for this ARP request
+      entry.second = now; // reset timer for this ARP request
     }
   }
 
   for ( auto it = arp_cache_.begin(); it != arp_cache_.end(); ) {
-    it->second.cache_time += ms_since_last_tick;
-    if ( it->second.cache_time >= 30000 ) {
+    if ( now - it->second.cache_time >= 30000 ) {
       it = arp_cache_.erase( it );
     } else {
       ++it;
@@ -148,8 +147,7 @@ void NetworkInterface::tick( const size_t ms_since_last_tick )
   while ( !ip_frames_out_.empty() ) {
     auto item = ip_frames_out_.front();
     ip_frames_out_.pop();
-    item.enqueue_time += ms_since_last_tick;
-    if ( item.enqueue_time <= 5000 ) {
+    if ( now - item.enqueue_time <= 5000 ) {
       keep.push( std::move( item ) );
     }
   }

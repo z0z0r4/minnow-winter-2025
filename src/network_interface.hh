@@ -108,4 +108,6 @@ private:
   std::unordered_map<uint32_t, ArpEntry> arp_cache_;
 
   std::unordered_map<uint32_t, size_t> arp_request_time_;
+
+  uint32_t now {};
 };
