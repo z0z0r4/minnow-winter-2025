@@ -39,7 +39,6 @@ public:
 
 private:
   Reader& reader() { return input_.reader(); }
-  void add_unacked_message( const TCPSenderMessage& msg );
 
   ByteStream input_;
   Wrap32 isn_;
