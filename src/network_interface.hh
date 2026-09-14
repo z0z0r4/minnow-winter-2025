@@ -6,6 +6,8 @@
 
 #include <memory>
 #include <queue>
+#include <unordered_map>
+#include <utility>
 
 // A "network interface" that connects IP (the internet layer, or network layer)
 // with Ethernet (the network access layer, or link layer).
@@ -39,6 +41,19 @@ public:
     virtual ~OutputPort() = default;
   };
 
+  struct PendingDatagram
+  {
+    InternetDatagram dgram;
+    Address next_hop;
+    size_t enqueue_time;
+  };
+
+  struct ArpEntry
+  {
+    EthernetAddress address;
+    size_t cache_time;
+  };
+
   // Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer)
   // addresses
   NetworkInterface( std::string_view name,
@@ -67,6 +82,10 @@ public:
   std::queue<InternetDatagram>& datagrams_received() { return datagrams_received_; }
 
 private:
+  void send_arp_request( const Address& next_hop );
+  void send_arp_reply( const EthernetAddress& target_eth_address, const Address& target_ip_address );
+  void send_eth_datagram( const InternetDatagram& dgram, const EthernetAddress& dst_ethernet_address );
+
   // Human-readable name of the interface
   std::string name_;
 
@@ -82,4 +101,11 @@ private:
 
   // Datagrams that have been received
   std::queue<InternetDatagram> datagrams_received_ {};
+
+  std::queue<PendingDatagram> ip_frames_out_;
+
+  // std::unordered_map<uint32_t, EthernetAddress> arp_cache_ {};
+  std::unordered_map<uint32_t, ArpEntry> arp_cache_;
+
+  std::unordered_map<uint32_t, size_t> arp_request_time_;
 };
