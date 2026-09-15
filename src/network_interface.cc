@@ -66,44 +66,36 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
     ARPMessage arp_message;
     arp_message.parse( parser );
 
+    // Learn the sender's mapping
+    arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, now };
+    auto arp_request_time_entry = arp_request_time_.find( arp_message.sender_ip_address );
+    if ( arp_request_time_entry != arp_request_time_.end() ) {
+      arp_request_time_.erase( arp_request_time_entry );
+    }
+
     if ( arp_message.opcode == ARPMessage::OPCODE_REQUEST ) {
-      if ( arp_message.target_ip_address != ip_address_.ipv4_numeric() ) {
-        return; // Drop
+      // If the ARP request is not for this interface's IP address, ignore it, only learn the mapping
+      if ( arp_message.target_ip_address == ip_address_.ipv4_numeric() ) {
+        // Send ARP reply
+        send_arp_reply( arp_message.sender_ethernet_address,
+                        Address::from_ipv4_numeric( arp_message.sender_ip_address ) );
       }
-      // Learn the sender's mapping
-      arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, now };
+    }
 
-      // Send ARP reply
-      send_arp_reply( arp_message.sender_ethernet_address,
-                      Address::from_ipv4_numeric( arp_message.sender_ip_address ) );
-    } else if ( arp_message.opcode == ARPMessage::OPCODE_REPLY ) {
-      if ( arp_message.target_ip_address != ip_address_.ipv4_numeric()
-           || arp_message.target_ethernet_address != ethernet_address_ ) {
-        return;
-      }
-
-      // Learn the sender's mapping
-      arp_cache_[arp_message.sender_ip_address] = { arp_message.sender_ethernet_address, now };
-      auto arp_request_time_entry = arp_request_time_.find( arp_message.sender_ip_address );
-      if ( arp_request_time_entry != arp_request_time_.end() ) {
-        arp_request_time_.erase( arp_request_time_entry );
-      }
-
-      // Process queued datagrams waiting for ARP resolution
-      size_t queue_size = ip_frames_out_.size();
-      for ( size_t i = 0; i < queue_size; ++i ) {
-        auto [dgram, next_hop, enqueue_time] = ip_frames_out_.front();
-        if ( next_hop.ipv4_numeric() == arp_message.sender_ip_address ) {
-          // ARP Cache hit, send the datagram
-          send_eth_datagram( dgram, arp_message.sender_ethernet_address );
-        } else {
-          // ARP Cache miss, keep it in the queue
-          if ( now - enqueue_time <= 5000 ) {
-            ip_frames_out_.push( { dgram, next_hop, enqueue_time } );
-          }
+    // Process queued datagrams waiting for ARP resolution
+    size_t queue_size = ip_frames_out_.size();
+    for ( size_t i = 0; i < queue_size; ++i ) {
+      auto [dgram, next_hop, enqueue_time] = ip_frames_out_.front();
+      if ( next_hop.ipv4_numeric() == arp_message.sender_ip_address ) {
+        // Sender eth_address Found, send the datagram
+        send_eth_datagram( dgram, arp_message.sender_ethernet_address );
+      } else {
+        // keep it in the queue if not expired
+        if ( now - enqueue_time <= 5000 ) {
+          ip_frames_out_.push( { dgram, next_hop, enqueue_time } );
         }
-        ip_frames_out_.pop();
       }
+      ip_frames_out_.pop();
     }
   } else if ( frame.header.type == EthernetHeader::TYPE_IPv4 ) {
     if ( frame.header.dst != ethernet_address_ ) {
@@ -115,8 +107,6 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
     InternetDatagram internet_datagram;
     internet_datagram.parse( parser );
     datagrams_received_.push( internet_datagram );
-  } else {
-    debug( "Ignored received unknown type frame." );
   }
 }
 
@@ -126,13 +116,14 @@ void NetworkInterface::tick( const size_t ms_since_last_tick )
   now += ms_since_last_tick;
 
   // Update ARP request timers
-  for ( auto& entry : arp_request_time_ ) {
-    if ( now - entry.second >= 5000 ) {
-      // Send ARP request again if it has been more than 5 seconds since the last request
-      send_arp_request( Address::from_ipv4_numeric( entry.first ) );
-      entry.second = now; // reset timer for this ARP request
-    }
-  }
+  // Test: [IP->Ethernet associations learned from ARP requests and replies both last for 30 s] doesn't allow us
+  // send ARP requests at tick(), expect none frame!
+  //   if ( now - entry.second >= 5000 ) {
+  //     // Send ARP request again if it has been more than 5 seconds since the last request
+  //     send_arp_request( Address::from_ipv4_numeric( entry.first ) );
+  //     entry.second = now; // reset timer for this ARP request
+  //   }
+  // }
 
   for ( auto it = arp_cache_.begin(); it != arp_cache_.end(); ) {
     if ( now - it->second.cache_time >= 30000 ) {
