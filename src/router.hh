@@ -32,6 +32,12 @@ public:
   void route();
 
 private:
+  // Check if a routing rule matches a destination IP address
+  bool is_rule_match( const std::tuple<uint32_t, uint8_t, std::optional<Address>, size_t>& rule,
+                      uint32_t dest_ip ) const;
+
   // The router's collection of network interfaces
   std::vector<std::shared_ptr<NetworkInterface>> interfaces_ {};
+
+  std::vector<std::tuple<uint32_t, uint8_t, std::optional<Address>, size_t>> routing_table_ {};
 };
