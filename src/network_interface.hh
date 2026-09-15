@@ -102,12 +102,12 @@ private:
   // Datagrams that have been received
   std::queue<InternetDatagram> datagrams_received_ {};
 
-  std::queue<PendingDatagram> ip_frames_out_;
+  std::queue<PendingDatagram> ip_frames_out_ {};
 
   // std::unordered_map<uint32_t, EthernetAddress> arp_cache_ {};
-  std::unordered_map<uint32_t, ArpEntry> arp_cache_;
+  std::unordered_map<uint32_t, ArpEntry> arp_cache_ {};
 
-  std::unordered_map<uint32_t, size_t> arp_request_time_;
+  std::unordered_map<uint32_t, size_t> arp_request_time_ {};
 
   uint32_t now {};
 };
