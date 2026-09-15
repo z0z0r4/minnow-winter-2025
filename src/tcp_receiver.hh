@@ -7,7 +7,8 @@
 class TCPReceiver
 {
 public:
-  enum class State {
+  enum class State
+  {
     LISTEN,
     SYN_RECEIVED,
     ESTABLISHED,

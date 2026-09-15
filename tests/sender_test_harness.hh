@@ -60,9 +60,7 @@ public:
 
   template<std::derived_from<TestStep<TCPSender>> T>
   void execute( const T& test )
-  {
-    TestHarness<SenderAndOutput>::execute( SenderTestStep { test } );
-  }
+  { TestHarness<SenderAndOutput>::execute( SenderTestStep { test } ); }
 
   using TestHarness<SenderAndOutput>::execute;
 };
@@ -365,9 +363,7 @@ struct ExpectMessage : public Expectation<SenderAndOutput>
   }
 
   std::string description() const override
-  {
-    return empty() ? "message sent" : "message sent with" + message_description();
-  }
+  { return empty() ? "message sent" : "message sent with" + message_description(); }
 
   void execute( const SenderAndOutput& ss ) const override
   {

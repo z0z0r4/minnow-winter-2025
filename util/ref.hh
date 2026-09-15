@@ -91,9 +91,7 @@ public:
 
   explicit operator std::string_view() const
     requires std::is_convertible_v<T, std::string_view>
-  {
-    return get();
-  }
+  { return get(); }
 
   T release()
   {
@@ -121,6 +119,4 @@ private:
 
 template<typename T>
 static Ref<T> borrow( const T& obj )
-{
-  return Ref<T>::borrow( obj );
-}
+{ return Ref<T>::borrow( obj ); }

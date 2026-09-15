@@ -78,9 +78,7 @@ void IPv4Header::serialize( Serializer& serializer ) const
 }
 
 uint16_t IPv4Header::payload_length() const
-{
-  return len - 4 * hlen;
-}
+{ return len - 4 * hlen; }
 
 //! \details This value is needed when computing the checksum of an encapsulated TCP segment.
 //! ~~~{.txt}

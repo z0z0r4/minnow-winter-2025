@@ -12,9 +12,7 @@ class FramesOut : public NetworkInterface::OutputPort
 public:
   std::queue<EthernetFrame> frames {};
   void transmit( const NetworkInterface& n [[maybe_unused]], const EthernetFrame& x ) override
-  {
-    frames.push( clone( x ) );
-  }
+  { frames.push( clone( x ) ); }
 
   EthernetFrame expect_frame() const
   {

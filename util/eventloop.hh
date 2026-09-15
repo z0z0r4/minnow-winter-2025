@@ -1,10 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <list>
 #include <memory>
 #include <poll.h>
-#include <cstdint>
 
 #include "file_descriptor.hh"
 
@@ -100,9 +100,7 @@ public:
   // convenience function to add category and rule at the same time
   template<typename... Targs>
   auto add_rule( const std::string& name, Targs&&... Fargs )
-  {
-    return add_rule( add_category( name ), std::forward<Targs>( Fargs )... );
-  }
+  { return add_rule( add_category( name ), std::forward<Targs>( Fargs )... ); }
 };
 
 using Direction = EventLoop::Direction;

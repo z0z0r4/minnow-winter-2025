@@ -73,9 +73,7 @@ FileDescriptor::FileDescriptor( shared_ptr<FDWrapper> other_shared_ptr ) : inter
 
 // returns a copy of this FileDescriptor
 FileDescriptor FileDescriptor::duplicate() const
-{
-  return FileDescriptor { internal_fd_ };
-}
+{ return FileDescriptor { internal_fd_ }; }
 
 // buffer is the string to be read into
 void FileDescriptor::read( string& buffer )
@@ -150,9 +148,7 @@ void FileDescriptor::read( vector<string>& buffers )
 }
 
 size_t FileDescriptor::write( string_view buffer )
-{
-  return write( vector<string_view> { buffer } );
-}
+{ return write( vector<string_view> { buffer } ); }
 
 size_t FileDescriptor::write( const vector<Ref<string>>& buffers )
 {

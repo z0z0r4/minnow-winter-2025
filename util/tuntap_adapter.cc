@@ -18,9 +18,7 @@ optional<TCPMessage> TCPOverIPv4OverTunFdAdapter::read()
 }
 
 void TCPOverIPv4OverTunFdAdapter::write( const TCPMessage& seg )
-{
-  _tun.write( serialize( wrap_tcp_in_ip( seg ) ) );
-}
+{ _tun.write( serialize( wrap_tcp_in_ip( seg ) ) ); }
 
 //! Specialize LossyFdAdapter to TCPOverIPv4OverTunFdAdapter
 template class LossyFdAdapter<TCPOverIPv4OverTunFdAdapter>;

@@ -33,9 +33,7 @@ public:
 
   template<std::derived_from<TestStep<ByteStream>> T>
   void execute( const T& test )
-  {
-    TestHarness<Reassembler>::execute( ReassemblerTestStep { test } );
-  }
+  { TestHarness<Reassembler>::execute( ReassemblerTestStep { test } ); }
 
   using TestHarness<Reassembler>::execute;
 };

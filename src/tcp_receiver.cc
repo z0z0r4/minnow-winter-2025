@@ -58,7 +58,7 @@ TCPReceiverMessage TCPReceiver::send() const
   uint64_t next_abs_seqno = 1 + reassembler_.writer().bytes_pushed();
 
   // All Done!
-  if ( state_ == State::FIN_RECEIVED && reassembler_.writer().is_closed()) {
+  if ( state_ == State::FIN_RECEIVED && reassembler_.writer().is_closed() ) {
     next_abs_seqno += 1;
   }
 

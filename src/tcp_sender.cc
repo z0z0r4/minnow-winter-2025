@@ -16,13 +16,12 @@ uint64_t TCPSender::sequence_numbers_in_flight() const
 
 // This function is for testing only; don't add extra state to support it.
 uint64_t TCPSender::consecutive_retransmissions() const
-{
-  return consecutive_retransmissions_count_;
-}
+{ return consecutive_retransmissions_count_; }
 
 void TCPSender::push( const TransmitFunction& transmit )
 {
-  while ( window_size_ > sequence_numbers_in_flight() || (window_size_ == 0 && sequence_numbers_in_flight() == 0 )) {
+  while ( window_size_ > sequence_numbers_in_flight()
+          || ( window_size_ == 0 && sequence_numbers_in_flight() == 0 ) ) {
     TCPSenderMessage msg = make_empty_message();
     uint64_t available;
 
@@ -32,10 +31,10 @@ void TCPSender::push( const TransmitFunction& transmit )
     } else {
       available = window_size_ - sequence_numbers_in_flight();
       // 给 SYN 留 1 位，剩下空间发 payload 和 FIN
-      const uint64_t space_for_payload = syn_sent_ ? available : (available >= 1 ? available - 1 : 0);
-      const uint64_t payload_size = std::min( std::min( reader().bytes_buffered() ,
-                                              static_cast<uint64_t>( TCPConfig::MAX_PAYLOAD_SIZE ) ),
-                                    space_for_payload );
+      const uint64_t space_for_payload = syn_sent_ ? available : ( available >= 1 ? available - 1 : 0 );
+      const uint64_t payload_size
+        = std::min( std::min( reader().bytes_buffered(), static_cast<uint64_t>( TCPConfig::MAX_PAYLOAD_SIZE ) ),
+                    space_for_payload );
       msg.payload = reader().peek().substr( 0, payload_size );
     }
 
@@ -45,8 +44,8 @@ void TCPSender::push( const TransmitFunction& transmit )
       msg.SYN = syn_sent_ = true;
     }
 
-    if ( !fin_sent_ && reader().is_finished() && available >= msg.payload.size() + msg.SYN + 1) {
-      msg.FIN = fin_sent_= true;
+    if ( !fin_sent_ && reader().is_finished() && available >= msg.payload.size() + msg.SYN + 1 ) {
+      msg.FIN = fin_sent_ = true;
     }
 
     if ( msg.sequence_length() == 0 && !msg.RST ) {
@@ -71,9 +70,7 @@ void TCPSender::push( const TransmitFunction& transmit )
 }
 
 TCPSenderMessage TCPSender::make_empty_message() const
-{
-  return TCPSenderMessage { Wrap32::wrap( next_abs_seqno_, isn_ ), false, "", false, reader().has_error() };
-}
+{ return TCPSenderMessage { Wrap32::wrap( next_abs_seqno_, isn_ ), false, "", false, reader().has_error() }; }
 
 void TCPSender::receive( const TCPReceiverMessage& msg )
 {
@@ -104,9 +101,9 @@ void TCPSender::receive( const TCPReceiverMessage& msg )
     while ( it != unacked_messages_.end() && it->first + it->second.sequence_length() <= acked_abs_seqno_ ) {
       it = unacked_messages_.erase( it );
 
-      RTO_ms_ = initial_RTO_ms_;              // Reset RTO to initial value
-      consecutive_retransmissions_count_ = 0; // Reset consecutive retransmissions count
-      retransmission_passed_time_ = 0;        // Reset the timer
+      RTO_ms_ = initial_RTO_ms_;                   // Reset RTO to initial value
+      consecutive_retransmissions_count_ = 0;      // Reset consecutive retransmissions count
+      retransmission_passed_time_ = 0;             // Reset the timer
       timer_running_ = !unacked_messages_.empty(); // Stop the timer if there are no unacked messages
     }
   } else {

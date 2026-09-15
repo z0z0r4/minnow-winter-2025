@@ -8,9 +8,7 @@
 using namespace std;
 
 unsigned int EventLoop::FDRule::service_count() const
-{
-  return direction == Direction::In ? fd.read_count() : fd.write_count();
-}
+{ return direction == Direction::In ? fd.read_count() : fd.write_count(); }
 
 size_t EventLoop::add_category( const string& name )
 {

@@ -61,34 +61,24 @@ Address Socket::get_address( const string& name_of_function,
 
 //! \returns the local Address of the socket
 Address Socket::local_address() const
-{
-  return get_address( "getsockname", getsockname );
-}
+{ return get_address( "getsockname", getsockname ); }
 
 //! \returns the socket's peer's Address
 Address Socket::peer_address() const
-{
-  return get_address( "getpeername", getpeername );
-}
+{ return get_address( "getpeername", getpeername ); }
 
 // bind socket to a specified local address (usually to listen/accept)
 //! \param[in] address is a local Address to bind
 void Socket::bind( const Address& address )
-{
-  CheckSystemCall( "bind", ::bind( fd_num(), address.raw(), address.size() ) );
-}
+{ CheckSystemCall( "bind", ::bind( fd_num(), address.raw(), address.size() ) ); }
 
 void Socket::bind_to_device( const string_view device_name )
-{
-  setsockopt( SOL_SOCKET, SO_BINDTODEVICE, device_name );
-}
+{ setsockopt( SOL_SOCKET, SO_BINDTODEVICE, device_name ); }
 
 // connect socket to a specified peer address
 //! \param[in] address is the peer's Address
 void Socket::connect( const Address& address )
-{
-  CheckSystemCall( "connect", ::connect( fd_num(), address.raw(), address.size() ) );
-}
+{ CheckSystemCall( "connect", ::connect( fd_num(), address.raw(), address.size() ) ); }
 
 // shut down a socket in the specified way
 //! \param[in] how can be `SHUT_RD`, `SHUT_WR`, or `SHUT_RDWR`; see [shutdown(2)](\ref man2::shutdown)
@@ -150,9 +140,7 @@ void DatagramSocket::send( const string_view payload )
 // mark the socket as listening for incoming connections
 //! \param[in] backlog is the number of waiting connections to queue (see [listen(2)](\ref man2::listen))
 void TCPSocket::listen( const int backlog )
-{
-  CheckSystemCall( "listen", ::listen( fd_num(), backlog ) );
-}
+{ CheckSystemCall( "listen", ::listen( fd_num(), backlog ) ); }
 
 // accept a new incoming connection
 //! \returns a new TCPSocket connected to the peer.
@@ -179,22 +167,16 @@ socklen_t Socket::getsockopt( const int level, const int option, option_type& op
 //! \details See [setsockopt(2)](\ref man2::setsockopt) for details.
 template<typename option_type>
 void Socket::setsockopt( const int level, const int option, const option_type& option_value )
-{
-  CheckSystemCall( "setsockopt", ::setsockopt( fd_num(), level, option, &option_value, sizeof( option_value ) ) );
-}
+{ CheckSystemCall( "setsockopt", ::setsockopt( fd_num(), level, option, &option_value, sizeof( option_value ) ) ); }
 
 // setsockopt with size only known at runtime
 void Socket::setsockopt( const int level, const int option, const string_view option_val )
-{
-  CheckSystemCall( "setsockopt", ::setsockopt( fd_num(), level, option, option_val.data(), option_val.size() ) );
-}
+{ CheckSystemCall( "setsockopt", ::setsockopt( fd_num(), level, option, option_val.data(), option_val.size() ) ); }
 
 // allow local address to be reused sooner, at the cost of some robustness
 //! \note Using `SO_REUSEADDR` may reduce the robustness of your application
 void Socket::set_reuseaddr()
-{
-  setsockopt( SOL_SOCKET, SO_REUSEADDR, int { true } );
-}
+{ setsockopt( SOL_SOCKET, SO_REUSEADDR, int { true } ); }
 
 void Socket::throw_if_error() const
 {

@@ -45,15 +45,11 @@ public:
 
   template<std::derived_from<TestStep<Reassembler>> T>
   void execute( const T& test )
-  {
-    TestHarness<TCPReceiver>::execute( DirectReassemblerTest { test } );
-  }
+  { TestHarness<TCPReceiver>::execute( DirectReassemblerTest { test } ); }
 
   template<std::derived_from<TestStep<ByteStream>> T>
   void execute( const T& test )
-  {
-    TestHarness<TCPReceiver>::execute( DirectByteStreamTest { test } );
-  }
+  { TestHarness<TCPReceiver>::execute( DirectByteStreamTest { test } ); }
 
   using TestHarness<TCPReceiver>::execute;
 };
@@ -90,9 +86,7 @@ struct ExpectAcknoBetween : public Expectation<TCPReceiver>
   {}
 
   std::string description() const override
-  {
-    return "ackno unwraps to between " + to_string( min_ ) + " and " + to_string( max_ );
-  }
+  { return "ackno unwraps to between " + to_string( min_ ) + " and " + to_string( max_ ); }
 
   void execute( const TCPReceiver& rs ) const override
   {

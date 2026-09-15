@@ -19,8 +19,8 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
 
   first_index = max( first_index, next_index_to_write_ );
   uint64_t last_index = min( original_last_index, first_unacceptable );
-  if (first_index >= last_index) {
-    if (eof_received_ && next_index_to_write_ == eof_index_) {
+  if ( first_index >= last_index ) {
+    if ( eof_received_ && next_index_to_write_ == eof_index_ ) {
       output_.writer().close();
     }
     return;
@@ -55,7 +55,8 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
       it = substrings_.erase( it );
     } else if ( status == Status::StrictlyInside || status == Status::ExactMatch ) {
       // do nothing, don't insert new_substring, return
-      // Inside or Exact match means it is impossible to overlap other substrings, no push at all, so we don't need to close
+      // Inside or Exact match means it is impossible to overlap other substrings, no push at all, so we don't need
+      // to close
       return;
     } else if ( status == Status::DisjointAfter ) {
       // then insert new_substring

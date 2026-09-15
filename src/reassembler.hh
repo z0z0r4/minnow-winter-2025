@@ -2,18 +2,20 @@
 
 #include "byte_stream.hh"
 
-#include <set>
 #include <map>
+#include <set>
 #include <utility>
 
 class Reassembler
 {
 public:
   // Construct Reassembler to write into given ByteStream.
-  explicit Reassembler( ByteStream&& output ) : output_( std::move( output ) ), substrings_({}), next_index_to_write_( 0 ) { }
-  
+  explicit Reassembler( ByteStream&& output )
+    : output_( std::move( output ) ), substrings_( {} ), next_index_to_write_( 0 )
+  {}
 
-  enum Status {
+  enum Status
+  {
     DisjointBefore,
     OverlapStart,
     StrictlyInside,
@@ -23,15 +25,17 @@ public:
     DisjointAfter,
   };
 
-  struct Substring {
+  struct Substring
+  {
     uint64_t first_index;
     uint64_t last_index;
     std::string data;
 
-    Substring() : first_index( 0 ), last_index( 0 ), data() { }
+    Substring() : first_index( 0 ), last_index( 0 ), data() {}
 
     Substring( uint64_t f_idx, uint64_t l_idx, std::string d )
-      : first_index( f_idx ), last_index( l_idx ), data( std::move( d ) ) {}
+      : first_index( f_idx ), last_index( l_idx ), data( std::move( d ) )
+    {}
   };
 
   /*
@@ -72,12 +76,12 @@ public:
 
 protected:
   Status check_overlap( const Substring& substring_a, const Substring& substring_b ) const;
-  Substring merge_substrings(const Substring& a_substring, const Substring& b_substring ) const;
+  Substring merge_substrings( const Substring& a_substring, const Substring& b_substring ) const;
 
 private:
   ByteStream output_;
-  
-  std::map<uint64_t, Substring> substrings_;  // key = first index
+
+  std::map<uint64_t, Substring> substrings_; // key = first index
 
   uint64_t next_index_to_write_ = 0;
   bool eof_received_ = false;

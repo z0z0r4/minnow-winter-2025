@@ -66,9 +66,7 @@ struct Peek : public Expectation<ByteStream>
   explicit Peek( std::string output ) : output_( move( output ) ) {}
 
   std::string description() const override
-  {
-    return "peeking (+popping) produces \"" + pretty_print( output_ ) + "\"";
-  }
+  { return "peeking (+popping) produces \"" + pretty_print( output_ ) + "\""; }
 
   void execute( const ByteStream& bs ) const override
   {
